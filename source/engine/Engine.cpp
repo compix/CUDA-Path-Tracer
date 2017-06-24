@@ -11,7 +11,6 @@
 #include "rendering/renderer/MeshRenderers.h"
 #include "util/QueryManager.h"
 #include "util/file.h"
-#include "rendering/voxelConeTracing/VoxelConeTracing.h"
 #include "util/colors.h"
 #include <SOIL2.h>
 
@@ -30,7 +29,6 @@ void Engine::init(Application* app)
     Input::subscribe(this);
     MeshRenderers::init();
     Mipmapper::init();
-    VoxelConeTracing::init();
 
     ImGui_ImplSdlGL3_Init(Screen::getSDLWindow());
 
@@ -96,7 +94,6 @@ void Engine::update()
 void Engine::shutdown()
 {
     m_app->quit();
-    VoxelConeTracing::terminate();
     ImGui_ImplSdlGL3_Shutdown();
     SDL_Quit();
 }

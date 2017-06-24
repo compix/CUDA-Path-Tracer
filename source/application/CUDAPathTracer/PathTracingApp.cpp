@@ -9,14 +9,11 @@
 #include "engine/rendering/debug/DebugRenderer.h"
 #include "engine/util/ECSUtil/ECSUtil.h"
 #include "engine/rendering/renderPasses/ShadowMapPass.h"
-#include "engine/rendering/voxelConeTracing/settings/VoxelConeTracingSettings.h"
 #include "engine/util/commands/RotationCommand.h"
 #include "engine/rendering/renderer/MeshRenderers.h"
 #include "engine/rendering/Screen.h"
 #include <cuda_runtime_api.h>
 #include "application/cuda/cuda_common.h"
-#include <vector_functions.hpp>
-#include "engine/rendering/renderPasses/SceneGeometryPass.h"
 #include "engine/rendering/renderPasses/ForwardScenePass.h"
 #include "engine/rendering/lights/DirectionalLight.h"
 #include "engine/globals.h"
