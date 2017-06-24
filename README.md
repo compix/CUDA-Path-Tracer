@@ -1,5 +1,4 @@
-# CUDA-Path-Tracer
-# Work In Progress
+# CUDA-Path-Tracer (Work In Progress)
 
 ## Screenshots
 ![BVH-Dragon-Hairball](https://github.com/compix/CUDA-Path-Tracer/blob/master/images/BVH-Dragon-Hairball.png)
