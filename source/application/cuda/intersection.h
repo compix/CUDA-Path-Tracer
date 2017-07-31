@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <glm/glm.hpp>
 #include "geometry.h"
 #include <engine/geometry/BBox.h>
@@ -34,8 +34,8 @@ namespace CUDA
         glm::vec3 q = glm::cross(direction, e2);
 
         float det = glm::dot(e1, q);
-
-        if (det > -CUDA_EPSILON5 && det < CUDA_EPSILON5)
+        
+        if (det > -FLT_EPSILON && det < FLT_EPSILON)
             return false;
 
         float inv_det = 1.f / det;
@@ -71,7 +71,7 @@ namespace CUDA
 
         float det = glm::dot(e1, q);
 
-        if (det > -CUDA_EPSILON5 && det < CUDA_EPSILON5)
+        if (det > -FLT_EPSILON && det < FLT_EPSILON)
             return false;
 
         float inv_det = 1.f / det;
@@ -120,5 +120,59 @@ namespace CUDA
     {
         float t;
         return rayAABBIntersection(o, d, aabb, t);
+    }
+
+    // Note that the assumption, that precomputing dInv to compute multiple ray/bbox tests for the same ray
+    // improves performance doesn't necessarily apply because inlining the computation leads to compiler optimizations
+    // that do it automatically resulting in the same assembly output.
+    __device__ inline bool rayAABBIntersectionInvDirection(const glm::vec3& o, const glm::vec3& dInv, const BBox& aabb, float& t)
+    {
+        glm::vec3 tMin = (aabb.min() - o) * dInv;
+        glm::vec3 tMax = (aabb.max() - o) * dInv;
+        glm::vec3 t1 = min(tMin, tMax);
+        glm::vec3 t2 = max(tMin, tMax);
+        t = glm::max(glm::max(t1.x, t1.y), t1.z); // near hit
+        float farT = glm::min(glm::min(t2.x, t2.y), t2.z); // far hit
+
+        return t <= farT && farT > 0.0f;
+    }
+
+    // Based on "An Efficient and Robust Ray–Box Intersection Algorithm" by Amy Williams et al.
+    __device__ inline bool segmentAABBIntersectionWilliams(const glm::vec3& o, const glm::ivec3& sign, 
+        const glm::vec3& dInv, float t0, float t1, const glm::vec3 bounds[2], float& tmin)
+    {
+        tmin = (bounds[sign[0]].x - o.x) * dInv.x;
+        float tmax = (bounds[1 - sign[0]].x - o.x) * dInv.x;
+        float tymin = (bounds[sign[1]].y - o.y) * dInv.y;
+        float tymax = (bounds[1 - sign[1]].y - o.y) * dInv.y;
+
+        if ((tmin > tymax) || (tymin > tmax))
+            return false;
+
+        if (tymin > tmin)
+            tmin = tymin;
+
+        if (tymax < tmax)
+            tmax = tymax;
+
+        float tzmin = (bounds[sign[2]].z - o.z) * dInv.z;
+        float tzmax = (bounds[1 - sign[2]].z - o.z) * dInv.z;
+
+        if ((tmin > tzmax) || (tzmin > tmax))
+            return false;
+
+        if (tzmin > tmin)
+            tmin = tzmin;
+
+        if (tzmax < tmax)
+            tmax = tzmax;
+
+        return ((tmin < t1) && (tmax > t0));
+    }
+
+    __device__ inline bool rayAABBIntersectionWilliams(const glm::vec3& o, const glm::ivec3& sign,
+        const glm::vec3& dInv, const glm::vec3 bounds[2], float& tmin)
+    {
+        return segmentAABBIntersectionWilliams(o, sign, dInv, 0.0f, FLT_MAX, bounds, tmin);
     }
 }

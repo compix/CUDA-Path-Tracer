@@ -4,7 +4,7 @@ std::unordered_map<UniformName, EditableMaterialDesc> EditableMaterialProperties
 
 void EditableMaterialProperties::init()
 {
-    m_materialDescs["u_shininess"] = EditableMaterialDesc(0.0f, 255.0f);
+    m_materialDescs["u_shininess"] = EditableMaterialDesc(0.0f, 1024.0f);
     m_materialDescs["u_emissionColor"] = EditableMaterialDesc(true);
     m_materialDescs["u_color"] = EditableMaterialDesc(true);
     m_materialDescs["u_specularColor"] = EditableMaterialDesc(true);

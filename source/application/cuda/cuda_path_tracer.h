@@ -20,7 +20,7 @@ public:
 	void setPrimaryRays(const CUDA::Ray& ray00, const CUDA::Ray& ray10, const CUDA::Ray& ray11, const CUDA::Ray& ray01);
 	void setEyePos(const glm::vec3& eyePos) { m_eyePos = eyePos; }
 
-	void raytrace(int screenWidth, int screenHeight, uint32_t frameNumber);
+	void raytrace(int screenWidth, int screenHeight);
 
 	void upload(const CUDA::HostSceneDescription& sceneDesc);
     CUDA::Scene* scene() const { return m_scene.get(); }
@@ -33,6 +33,8 @@ private:
 	
 	std::shared_ptr<CUDA::Scene> m_scene{nullptr};
 
+    float m_startTime = 0.0f;
+    bool m_displayedTimeForFrame{ false };
     cudaSurfaceObject_t m_screenTexture{0};
     uint32_t m_localFrameNumber;
 };

@@ -225,6 +225,7 @@ void PathTracingGUI::guiShowFPS()
 
     ss << "FPS: " << fps;
     ss << " Frame time: " << std::fixed << frameTime << "ms";
+    ss << " Frame Num: " << PathTracerSettings::DEMO.frameNum;
     ss << " Total time: " << int(Time::totalTime());
 
     ImGui::Text(ss.str().c_str());

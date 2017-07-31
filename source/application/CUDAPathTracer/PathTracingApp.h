@@ -12,7 +12,7 @@
 #include "GUI/PathTracingGUI.h"
 #include "engine/rendering/architecture/RenderPipeline.h"
 
-#define SCENE_COUNT 2
+#define SCENE_COUNT 3
 
 class PathTracingApp : public Application, InputHandler
 {
@@ -21,10 +21,13 @@ class PathTracingApp : public Application, InputHandler
         std::string path;
         std::string texturePath;
         float scale{0.0f};
+        glm::vec3 cameraPos;
+        glm::vec3 cameraEulerAngles;
+        glm::vec3 dirLightEulerAngles;
 
         SceneDesc() {}
-        SceneDesc(const std::string& path, const std::string& texPath, float scale)
-            :path(path), texturePath(texPath), scale(scale) {}
+        SceneDesc(const std::string& path, const std::string& texPath, float scale, glm::vec3 camPos, glm::vec3 camEuler, glm::vec3 dirLightEuler)
+            :path(path), texturePath(texPath), scale(scale), cameraPos(camPos), cameraEulerAngles(camEuler), dirLightEulerAngles(dirLightEuler) {}
     };
 public:
 	PathTracingApp();

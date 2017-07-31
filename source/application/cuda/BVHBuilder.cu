@@ -163,36 +163,36 @@ struct radix_tree_construction_kernel
             if (delta(i, i + (s + l) * d) > dNode)
                 s += l;
         }
-        int y = i + s * d + min(d, 0);
+        s = i + s * d + min(d, 0);
 
         // Set children
         NodeIndex typeCode = 0;
 
-        if (min(i, j) != y)
+        if (min(i, j) != s)
         {
             // Internal Node
             typeCode |= 1;
-            parents[INTERNAL_PARENTS_IDX][y] = i;
+            parents[INTERNAL_PARENTS_IDX][s] = i;
         }
         else
         {
             // Leaf Node
-            parents[LEAF_PARENTS_IDX][y] = i;
+            parents[LEAF_PARENTS_IDX][s] = i;
         }
 
-        if (max(i, j) != y + 1)
+        if (max(i, j) != s + 1)
         {
             // Internal Node
             typeCode |= 2;
-            parents[INTERNAL_PARENTS_IDX][y + 1] = i;
+            parents[INTERNAL_PARENTS_IDX][s + 1] = i;
         }
         else
         {
             // Leaf Node
-            parents[LEAF_PARENTS_IDX][y + 1] = i;
+            parents[LEAF_PARENTS_IDX][s + 1] = i;
         }
 
-        return Node(y, typeCode);
+        return Node(s, typeCode);
     }
 
     MortonCode3D<IntType>* mortonCodes;

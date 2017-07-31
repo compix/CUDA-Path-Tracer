@@ -281,7 +281,7 @@ void PathTracingApp::update()
 
     if (m_usePathTracer)
     {
-        m_cudaPathTracer.raytrace(m_texture.getWidth(), m_texture.getHeight(), m_engine->getFrameNumber());
+        m_cudaPathTracer.raytrace(m_texture.getWidth(), m_texture.getHeight());
         CUDA_ERROR_CHECK(cudaStreamSynchronize(0));
 
         m_fullscreenQuadShader->bind();
@@ -421,24 +421,29 @@ void PathTracingApp::createDemoScene()
 
     auto camComponent = camera.getComponent<CameraComponent>();
     auto camTransform = camera.getComponent<Transform>();
+    glm::vec3 camPosSponza(8.625f, 6.593f, -0.456f);
+    glm::vec3 camPosCornell(-0.324f, 4.428f, -13.0f);
+    glm::vec3 camPosDragon(-3.311f, 4.489f, -0.158f);
+
+    m_forwardShader = ResourceManager::getShader("shaders/forwardShadingPass.vert", "shaders/forwardShadingPass.frag",
+    { "in_pos", "in_normal", "in_tangent", "in_bitangent", "in_uv" });
+    m_scenes[0] = SceneDesc("meshes/sponza_obj/sponza.obj", "textures/sponza_textures/", 0.01f, camPosSponza,
+        glm::vec3(math::toRadians(10.236f), math::toRadians(-66.0f), 0.0f), glm::vec3(math::toRadians(72.0f), 0.0f, 0.0f));
+
+    m_scenes[1] = SceneDesc("meshes/cornell-box/CornellBox-Original.obj", "", 5.0f, camPosCornell,
+        glm::vec3(0.0f, 0.0, 0.0f), glm::vec3(math::toRadians(46.0f), math::toRadians(-14.0f), 0.0f));
+
+    m_scenes[2] = SceneDesc("meshes/dragon.obj", "", 5.0f, camPosDragon, glm::vec3(math::toRadians(45.538f), math::toRadians(87.0f), 0.0f),
+        glm::vec3(math::toRadians(72.0f), 0.0f, 0.0f));
 
     MainCamera = camComponent;
 
     camComponent->setPerspective(45.0f, float(Screen::getWidth()), float(Screen::getHeight()), 0.3f, 30.0f);
-    glm::vec3 cameraPositionOffset(8.625f, 6.593f, -0.456f);
-    //glm::vec3 cameraPositionOffset(-0.324f, 4.428f, -14.886f);
-    camTransform->setPosition(cameraPositionOffset);
-    camTransform->setEulerAngles(glm::vec3(math::toRadians(10.236f), math::toRadians(-66.0f), 0.0f));
-    //camTransform->setEulerAngles(glm::vec3(0.0f, 0.0, 0.0f));
+    camTransform->setPosition(m_scenes[m_selectedSceneIdx].cameraPos);
+    camTransform->setEulerAngles(m_scenes[m_selectedSceneIdx].cameraEulerAngles);
 
     m_engine->registerCamera(camComponent);
 
-    m_forwardShader = ResourceManager::getShader("shaders/forwardShadingPass.vert", "shaders/forwardShadingPass.frag",
-        { "in_pos", "in_normal", "in_tangent", "in_bitangent", "in_uv" });
-    m_scenes[0] = SceneDesc("meshes/sponza_obj/sponza.obj", "textures/sponza_textures/", 0.01f);
-    m_scenes[1] = SceneDesc("meshes/cornell-box/CornellBox-Original.obj", "", 5.0f);
-    //m_scenes[2] = SceneDesc("meshes/dragon.obj", "", 5.0f);
-    //m_scenes[3] = SceneDesc("meshes/hairball.obj", "", 1.0f);
     loadScene(m_scenes[m_selectedSceneIdx]);
 
     if (m_sceneRoot)
@@ -448,7 +453,7 @@ void PathTracingApp::createDemoScene()
     m_directionalLight.addComponent<DirectionalLight>();
     m_directionalLight.addComponent<Transform>();
     m_directionalLight.getComponent<Transform>()->setPosition(glm::vec3(0.0f, 20.0f, 0.f));
-    m_directionalLight.getComponent<Transform>()->setEulerAngles(glm::vec3(math::toRadians(72.0f), 0.0f, 0.0f));
+    m_directionalLight.getComponent<Transform>()->setEulerAngles(m_scenes[m_selectedSceneIdx].dirLightEulerAngles);
     m_directionalLight.getComponent<DirectionalLight>()->intensity = 1.5f;
     m_directionalLight.getComponent<DirectionalLight>()->shadowsEnabled = false;
 }
@@ -462,6 +467,8 @@ void PathTracingApp::uploadSceneToPathTracer()
     {
         extractScene(e.getComponent<Transform>(), false, sceneDesc, triangleIdx);
     }
+
+    LOG("Number of triangles in scene: " << sceneDesc.triangles.size());
 
     for (auto e : ECS::getEntitiesWithComponents<DirectionalLight>())
     {

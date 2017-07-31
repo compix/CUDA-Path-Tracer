@@ -8,6 +8,7 @@
 __constant__ GeometryData g_geometryData;
 __constant__ ShadingData g_shadingData;
 __constant__ LightingData g_lightingData;
+__constant__ MiscData g_miscData;
 
 CUDA::Scene* CUDA::Scene::m_activeScene{nullptr};
 
@@ -47,6 +48,10 @@ void CUDA::Scene::upload(const CUDA::HostSceneDescription& sceneDesc)
     lightingData.indirectBounceCount = static_cast<uint8_t>(PathTracerSettings::GI.indirectBounceCount);
 
     CUDA_ERROR_CHECK(cudaMemcpyToSymbol(g_lightingData, &lightingData, sizeof(LightingData)));
+
+    MiscData miscData;
+    miscData.useStratifiedSampling = PathTracerSettings::GI.useStratifiedSampling;
+    CUDA_ERROR_CHECK(cudaMemcpyToSymbol(g_miscData, &miscData, sizeof(MiscData)));
 }
 
 void CUDA::Scene::upload(const thrust::host_vector<cudaMipmappedArray_t>& textureArrays)

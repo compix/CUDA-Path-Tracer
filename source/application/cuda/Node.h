@@ -15,8 +15,8 @@ struct Node
     * AB - A refers to right, B to current/left node
     * Where
     * 00: this node is a leaf, right node is a leaf
-    * 10: this node is a leaf, right node is internal
     * 01: this is an internal node and the right sibling is a leaf node
+    * 10: this node is a leaf, right node is internal
     * 11: this is an internal node and the right sibling is an internal node
     *
     * Since 2 bits are used to encode additional information,
@@ -30,6 +30,8 @@ struct Node
         :idx((i << 2) | typeCode) {}
 
     HOST_AND_DEVICE Node() {}
+
+    HOST_AND_DEVICE static Node makeInternal(NodeIndex i) { return Node(i, 1); }
 
     HOST_AND_DEVICE void toLeafRightLeaf(NodeIndex i)
     {
@@ -108,7 +110,27 @@ struct Node
 
     HOST_AND_DEVICE bool isRightChildInternal() const
     {
-        return ((idx & 2) >> 1) == 1;
+        return (idx & 2) == 2;
+    }
+
+    HOST_AND_DEVICE bool isInternal() const
+    {
+        return (idx & 1) == 1;
+    }
+
+    HOST_AND_DEVICE NodeIndex typeCode() const
+    {
+        return idx & 3;
+    }
+
+    HOST_AND_DEVICE Node leftNode() const
+    {
+        return Node(leftChildIndex(), leftChildType());
+    }
+
+    HOST_AND_DEVICE Node rightNode() const
+    {
+        return Node(rightChildIndex(), rightChildType());
     }
 
     NodeIndex idx{ 0 };

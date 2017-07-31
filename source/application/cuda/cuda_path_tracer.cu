@@ -26,6 +26,8 @@
 #include "math_util.h"
 #include "logging.h"
 #include "engine/util/Random.h"
+#include "application/CUDAPathTracer/GUI/PathTracingSettings.h"
+#include "engine/util/Timer.h"
 
 #define CHECK_FOR_FULL_STACK
 //#define CHECK_TRIANGLE_IDX_OUT_OF_BOUNDS
@@ -73,13 +75,14 @@ __device__ glm::vec3 blinnPhongShadingTrace(
         glm::vec3 normal = glm::normalize(
             glm::cross(g_geometryData.triangles[triangleIdx].v1 - g_geometryData.triangles[triangleIdx].v0,
                 g_geometryData.triangles[triangleIdx].v2 - g_geometryData.triangles[triangleIdx].v0));
+
         return blinnPhongBRDF(glm::vec3(1.0f), color, glm::vec3(1.0f), glm::vec3(0.1f), normal, lightVec, halfway, 32.0f);
     }
 
     return glm::vec3(0.0f);
 }
 
-__device__ glm::vec3 unpackNormal(const CUDA::TriangleInfo& info, const glm::vec2& triangleUV, 
+__device__ glm::vec3 unpackNormal(const CUDA::TriangleInfo& info, const glm::vec2& triangleUV,
     const glm::vec2& texCoords, glm::vec3& outTangent, glm::vec3& outBitangent)
 {
     glm::vec3 normal = info.computeNormal(triangleUV);
@@ -94,7 +97,7 @@ __device__ glm::vec3 unpackNormal(const CUDA::TriangleInfo& info, const glm::vec
 
     outTangent = info.computeTangent(triangleUV);
     outBitangent = info.computeBitangent(triangleUV);
-    
+
     glm::vec3 outNormal = normalSample.x * outTangent + normalSample.y * outBitangent + normalSample.z * normal;
     return glm::normalize(outNormal);
 }
@@ -110,7 +113,7 @@ __device__ glm::vec3 unpackNormal(const CUDA::TriangleInfo& info, const glm::vec
  * Expecting triangleIdx to be valid.
  */
 __device__ void extractInfo(
-    TriangleIndex triangleIdx, 
+    TriangleIndex triangleIdx,
     const glm::vec2& triangleUV,
     glm::vec3& outNormal,
     glm::vec3& outTangent,
@@ -206,7 +209,7 @@ __device__ glm::vec3 blinnPhongShadingShadowTrace(
             L += CUDA::computeL(outHitPos, dirLight);
             glm::vec3 view = -primaryRay.direction;
             glm::vec3 halfway = 0.5f * (view - dirLight.direction);
-            color += blinnPhongBRDF(L, outAlbedo, L, glm::vec3(0.5f), outNormal, 
+            color += blinnPhongBRDF(L, outAlbedo, L, glm::vec3(0.5f), outNormal,
                 -dirLight.direction, halfway, triangleInfo.material.specularity);
         }
 
@@ -239,34 +242,11 @@ __device__ glm::vec3 blinnPhongShadingShadowTrace(
     return blinnPhongShadingShadowTrace(primaryRay, eyePos, randState, outTriangleIdx, hitPos, normal, outTangent, outBitangent, albedo);
 }
 
-/**
- * Transform a given vector to the hemisphere given by normal.
- */
-__device__ glm::vec3 toHemisphere(const glm::vec3& vector, const glm::vec3& normal)
-{
-    glm::vec3 x;
-    if (glm::abs(normal.x) < 0.5f)
-        x = glm::cross(normal, glm::vec3(1.0f, 0.0f, 0.0f));
-    else
-        x = glm::cross(normal, glm::vec3(0.0f, 1.0f, 0.0f));
-
-    x = glm::normalize(x);
-    glm::vec3 y = glm::normalize(glm::cross(normal, x));
-    return vector.x * x + vector.y * y + vector.z * normal;
-}
-
-/**
-* Transform a given vector to the hemisphere given by normal.
-*/
-__device__ glm::vec3 toHemisphere(const glm::vec3& vector, const glm::vec3& normal, const glm::vec3& tangent, const glm::vec3& bitangent)
-{
-    return vector.x * tangent + vector.y * bitangent + vector.z * normal;
-}
-
 __device__ glm::vec3 blinnPhongShadingPathTrace(
     const CUDA::Ray& primaryRay,
     const glm::vec3& eyePos,
-    curandState* randState)
+    curandState* randState,
+    uint32_t frameNum)
 {
     glm::vec2 triangleUV;
     glm::vec3 albedo;
@@ -288,8 +268,20 @@ __device__ glm::vec3 blinnPhongShadingPathTrace(
     {
         curRay.origin = hitPos + normal * CUDA_EPSILON5;
         // Using importance sampling with a cosine weighted distribution -> No need to multiply with cos(theta)
-        curRay.direction = rng::cosDistribution::getHemisphereDirection3D(randState);
-        curRay.direction = toHemisphere(curRay.direction, normal);
+        // Note: Only using stratified sampling for the first bounce because the second bounce would need to be combined with the
+        // first stratification approach which leads to the curse of dimensionality.
+        if (g_miscData.useStratifiedSampling && i == 0)
+        {
+            const int extent = 8;
+            glm::ivec2 dim(extent, extent);
+            uint32_t pos1D = frameNum % (extent * extent);
+            glm::ivec2 strataPos(pos1D % extent, pos1D / extent);
+            curRay.direction = rng::cosDistribution::stratified::getHemisphereDirection3D(randState, dim, strataPos);
+        }
+        else
+            curRay.direction = rng::cosDistribution::getHemisphereDirection3D(randState);
+
+        curRay.direction = CUDA::toHemisphere(curRay.direction, normal);
 
         float t = trace(curRay, triangleIdx, triangleUV);
 
@@ -311,7 +303,11 @@ __device__ glm::vec3 blinnPhongShadingPathTrace(
             glm::vec3 emission = triangleInfo.material.emission;
             if ((emission.r + emission.g + emission.b) > CUDA_EPSILON)
             {
-                L = emission * glm::dot(-curRay.direction, normal);
+                // Note the cos(phi) term here where phi is the angle between the normal of the 
+                // "area" light (can be seen as one because we are hitting an emitting surface)
+                // and the negative ray direction: Usually you would have to multiply by the usual cos(theta)
+                // but as mentioned above this is not necessary because we are sampling from a cosine weighted distribution
+                L = emission * glm::max(glm::dot(-curRay.direction, normal), 0.0f);
                 albedo = glm::vec3(1.0f);
             }
             else
@@ -320,10 +316,10 @@ __device__ glm::vec3 blinnPhongShadingPathTrace(
                 for (int i = 0; i < g_lightingData.dirLightCount; ++i)
                 {
                     auto dirLight = g_lightingData.dirLights[i];
-                    L += CUDA::computeL(hitPos, dirLight) * glm::dot(-dirLight.direction, normal);
+                    L += CUDA::computeL(hitPos, dirLight) * glm::max(glm::dot(-dirLight.direction, normal), 0.0f);
                 }
             }
-            
+
             absorbed *= albedo;
             accumulatedColor += absorbed * L * g_lightingData.indirectIntensity;
         }
@@ -333,7 +329,7 @@ __device__ glm::vec3 blinnPhongShadingPathTrace(
         }
     }
 
-    return accumulatedColor;
+    return (accumulatedColor);
 }
 
 #pragma region PathTracer
@@ -393,7 +389,7 @@ __global__ void raytrace_kernel(cudaSurfaceObject_t surfObj, glm::vec3 eyePos,
     uint32_t imgY = blockIdx.y * blockDim.y + threadIdx.y;
     uint64_t threadId = (blockIdx.x + blockIdx.y * gridDim.x) * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
 
-    // Some seeding tests that yield interesting convergance/image computation patterns.
+    // Some seeding tests that yield interesting convergence/image computation patterns.
     //uint64_t seed = uint64_t(frameNumber) + uint64_t((imgX << 16) | imgY);
     //uint64_t seed = (frameNumber << 16) | ((imgX << 10) | imgY);
     //uint64_t seed = frameNumber; // Seems to yield faster visually appealing (to me) results
@@ -410,7 +406,7 @@ __global__ void raytrace_kernel(cudaSurfaceObject_t surfObj, glm::vec3 eyePos,
     primaryRay.direction = lerpDirection(ray00, ray10, ray11, ray01, texCoords.x, texCoords.y);
     primaryRay.origin = eyePos;
 
-    glm::vec3 raytracedColor = blinnPhongShadingPathTrace(primaryRay, eyePos, &randState);
+    glm::vec3 raytracedColor = blinnPhongShadingPathTrace(primaryRay, eyePos, &randState, frameNumber);
 
     glm::vec3 hitColor = raytracedColor;
     float4 readColor;
@@ -418,16 +414,32 @@ __global__ void raytrace_kernel(cudaSurfaceObject_t surfObj, glm::vec3 eyePos,
     glm::vec3 finalColor(readColor.x, readColor.y, readColor.z);
 
     float t = float(frameNumber) / (frameNumber + 1.0f);
-    finalColor = glm::lerp(hitColor, finalColor, t);
+    finalColor = (glm::lerp(hitColor, finalColor, t));
 
     float4 color = make_float4(finalColor.r, finalColor.g, finalColor.b, 1.0f);
     surf2Dwrite(color, surfObj, imgX * sizeof(float4), imgY, cudaBoundaryModeClamp);
 }
 
-void CUDAPathTracer::raytrace(int screenWidth, int screenHeight, uint32_t frameNumber)
+void CUDAPathTracer::raytrace(int screenWidth, int screenHeight)
 {
     if (!m_scene->isReady())
         return;
+
+    if (m_localFrameNumber == uint32_t(PathTracerSettings::DEMO.stopAtFrame))
+    {
+        if (!m_displayedTimeForFrame)
+        {
+            printf("Picture generation time for %d iterations: %f\n", m_localFrameNumber, Time::totalTime() - m_startTime);
+            m_displayedTimeForFrame = true;
+        }
+        return;
+    }
+    m_displayedTimeForFrame = false;
+
+    if (m_localFrameNumber == 0)
+    {
+        m_startTime = Time::totalTime();
+    }
 
     dim3 threadsPerBlock(8, 8);
     dim3 numBlocks(screenWidth / threadsPerBlock.x, screenHeight / threadsPerBlock.y);
@@ -447,6 +459,8 @@ void CUDAPathTracer::raytrace(int screenWidth, int screenHeight, uint32_t frameN
 
     CUDA_ERROR_CHECK(cudaGetLastError());
     ++m_localFrameNumber;
+
+    PathTracerSettings::DEMO.frameNum = m_localFrameNumber;
 }
 
 void CUDAPathTracer::upload(const CUDA::HostSceneDescription& sceneDesc)

@@ -36,6 +36,7 @@ struct Frustum
 /**
 * Default assumption for screen coordinates is (0, 0) in lower left corner, (screenWidth, screenHeight) in upper right corner.
 * The viewport is described in screen coordinates.
+* NDC coordinates are in a [-1,1]^3 cube. lower left corner is (-1,-1,-1).
 */
 class CameraComponent : public Component
 {

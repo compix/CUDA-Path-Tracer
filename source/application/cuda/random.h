@@ -66,6 +66,27 @@ namespace rng
         return glm::normalize(r - p);
     }
 
+    namespace stratified
+    {
+        /**
+        * Returns a random point (in [0,1)^2) in the strata given by strataPos in [0, dim.x - 1], [0, dim.y - 1].
+        */
+        __device__ inline glm::vec2 getVec2(curandState* state, const glm::ivec2& dim, const glm::ivec2& strataPos)
+        {
+            return glm::vec2(
+                (strataPos.x + rng::getFloat(state)) / dim.x,
+                (strataPos.y + rng::getFloat(state)) / dim.y);
+        }
+
+        /**
+        * Returns a random float (in [0,1)) in the strata given by strataPos in [0, dim - 1].
+        */
+        __device__ inline float getFloat(curandState* state, int dim, int strataPos)
+        {
+            return (strataPos + rng::getFloat(state)) / dim;
+        }
+    }
+
     /*
      * This distribution is not uniform but cosine weighted: (pdf(x) = cos(theta)/pi)
      * Lower probability for rays in the lower part of the hemisphere.
@@ -79,6 +100,17 @@ namespace rng
             float r = sqrtf(rand.x);
             float theta = CUDA_2PI * rand.y;
             return glm::vec3(r * cosf(theta), r * sin(theta), sqrtf(1.0f - rand.x));
+        }
+
+        namespace stratified
+        {
+            __device__ inline glm::vec3 getHemisphereDirection3D(curandState* state, const glm::ivec2& dim, const glm::ivec2& strataPos)
+            {
+                glm::vec2 rand = rng::stratified::getVec2(state, dim, strataPos);
+                float r = sqrtf(rand.x);
+                float theta = CUDA_2PI * rand.y;
+                return glm::vec3(r * cosf(theta), r * sin(theta), sqrtf(1.0f - rand.x));
+            }
         }
     }
 }
