@@ -1,4 +1,8 @@
-# CUDA-Path-Tracer (Work In Progress)
+# CUDA-Path-Tracer
+
+## Main Features
+* Unidirectional CUDA accelererated progressive path tracer
+* Highly parallel BVH construction with CUDA based on "Maximizing parallelism in the construction of BVHs, octrees, and k-d trees" by Karras, T., 2012, June.
 
 ## Screenshots
 ![BVH-Dragon-Hairball](https://github.com/compix/CUDA-Path-Tracer/blob/master/images/BVH-Dragon-Hairball.png)
